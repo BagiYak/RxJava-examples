@@ -27,6 +27,15 @@ class MainActivity : ComponentActivity() {
         val taskObservable: Observable<Task> = Observable
             .fromIterable(createTasksList())
             .subscribeOn(Schedulers.io())
+            .filter {
+                Log.d(TAG, "test sleep: Thread name:: -> " + Thread.currentThread().name)
+                try {
+                    Thread.sleep(2000)
+                } catch (e: InterruptedException) {
+                    e.printStackTrace()
+                }
+                return@filter it.isComplete
+            }
             .observeOn(AndroidSchedulers.mainThread())
 
         taskObservable.subscribe(object : Observer<Task> {
@@ -36,11 +45,6 @@ class MainActivity : ComponentActivity() {
             override fun onNext(t: Task) {
                 Log.d(TAG, "onNext: Thread name:: -> " + Thread.currentThread().name)
                 Log.d(TAG, "onNext: task description:: -> " + t.description)
-                try {
-                    Thread.sleep(1000)
-                } catch (e: InterruptedException) {
-                    e.printStackTrace()
-                }
             }
 
             override fun onError(e: Throwable?) {}
