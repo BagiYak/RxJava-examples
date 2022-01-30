@@ -3,24 +3,24 @@ package kz.bagiyak.rxjava_examples
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import android.util.Log
-import io.reactivex.rxjava3.disposables.Disposable
-import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
-import io.reactivex.rxjava3.core.Observable
-import io.reactivex.rxjava3.core.Observer
-import io.reactivex.rxjava3.schedulers.Schedulers
 import android.widget.TextView
-import io.reactivex.rxjava3.disposables.CompositeDisposable
+import io.reactivex.rxjava3.disposables.*
+import io.reactivex.rxjava3.schedulers.Schedulers
+import io.reactivex.rxjava3.core.Flowable
+import io.reactivex.rxjava3.core.FlowableSubscriber
+import org.reactivestreams.Subscription
 
 
 class MainActivity : ComponentActivity() {
 
     private val TAG = "MainActivity"
+    private val MY_MAX_VALUE = 1000000
 
     //ui
     private var text: TextView? = null
 
-    //vars
-    private val disposables = CompositeDisposable() // Instantiate a new CompositeDisposable object. Typically this will be a global variable inside your Activity or ViewModel.
+    // vars
+    lateinit var subscription: Subscription
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,44 +28,40 @@ class MainActivity : ComponentActivity() {
         setContentView(R.layout.activity_main)
         text = findViewById(R.id.text)
 
-        val taskObservable: Observable<Task> = Observable
-            .fromIterable(createTasksList())
-            .subscribeOn(Schedulers.io())
-            .filter {
-                Log.d(TAG, "test sleep: Thread name:: -> " + Thread.currentThread().name)
-                try {
-                    Thread.sleep(2000)
-                } catch (e: InterruptedException) {
-                    e.printStackTrace()
+        Flowable
+            .range(0, MY_MAX_VALUE)
+            .onBackpressureBuffer()
+            .observeOn(Schedulers.computation())
+            .subscribe(object : FlowableSubscriber<Int> {
+
+                override fun onSubscribe(s: Subscription) {
+                    Log.d(TAG, "onSubscribe: Thread name:: -> " + Thread.currentThread().name)
+                    Log.d(TAG, "onSubscribe: called.")
+                    // Since Flowable supports backpressure you have to actually control
+                    // how many items you can consume by calling request method on your Subscription
+                    // so that they can be emitted by Flowables
+                    subscription = s
+                    subscription.request(MY_MAX_VALUE.toLong())
                 }
-                return@filter it.isComplete
-            }
-            .observeOn(AndroidSchedulers.mainThread())
 
-        taskObservable.subscribe(object : Observer<Task> {
+                override fun onNext(it: Int) {
+                    if (it.compareTo(0) == 0)
+                        Log.d(TAG, "onNext: Thread name:: -> " + Thread.currentThread().name)
 
-            override fun onSubscribe(d: Disposable?) {
-                Log.d(TAG, "onSubscribe: Thread name:: -> " + Thread.currentThread().name)
-                Log.d(TAG, "onSubscribe: called.")
-                disposables.add(d)  // Add the disposable to the CompositeDisposable.
-            }
+                    Log.d(TAG, "onNext: -> $it")
+                }
 
-            override fun onNext(t: Task) {
-                Log.d(TAG, "onNext: Thread name:: -> " + Thread.currentThread().name)
-                Log.d(TAG, "onNext: task description:: -> " + t.description)
-            }
+                override fun onError(t: Throwable?) {
+                    Log.d(TAG, "onError: Thread name:: -> " + Thread.currentThread().name)
+                    Log.d(TAG, "onError: ", t)
+                }
 
-            override fun onError(e: Throwable?) {
-                Log.d(TAG, "onError: Thread name:: -> " + Thread.currentThread().name)
-                Log.d(TAG, "onError: ", e)
-            }
+                override fun onComplete() {
+                    Log.d(TAG, "onComplete: Thread name:: -> " + Thread.currentThread().name)
+                    Log.d(TAG, "onComplete: called.")
+                }
 
-            override fun onComplete() {
-                Log.d(TAG, "onComplete: Thread name:: -> " + Thread.currentThread().name)
-                Log.d(TAG, "onComplete: called.")
-            }
-
-        })
+            })
 
     }
 
@@ -75,10 +71,8 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
 
         Log.d(TAG, "onDestroy: Thread name:: -> " + Thread.currentThread().name)
-        // Then when the Observer is no longer needed, clear the disposables.
-        // A good place to do this is in the onDestroy() method of an Activity or Fragment.
-        // Or in the onCleared() method of a ViewModel.
-        disposables.clear()
-        Log.d(TAG, "onDestroy: disposables.clear() called")
+
+        subscription.cancel()
+        Log.d(TAG, "onDestroy: subscription.cancel() called")
     }
 }
