@@ -19,8 +19,8 @@ class MainActivity : ComponentActivity() {
     //ui
     private var text: TextView? = null
 
-    // vars
-    lateinit var subscription: Subscription
+    //vars
+    private val disposables = CompositeDisposable() // Instantiate a new CompositeDisposable object. Typically this will be a global variable inside your Activity or ViewModel.
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,41 +28,16 @@ class MainActivity : ComponentActivity() {
         setContentView(R.layout.activity_main)
         text = findViewById(R.id.text)
 
-        Flowable
+        val disposable = Flowable
             .range(0, MY_MAX_VALUE)
             .onBackpressureBuffer()
             .observeOn(Schedulers.computation())
-            .subscribe(object : FlowableSubscriber<Int> {
-
-                override fun onSubscribe(s: Subscription) {
-                    Log.d(TAG, "onSubscribe: Thread name:: -> " + Thread.currentThread().name)
-                    Log.d(TAG, "onSubscribe: called.")
-                    // Since Flowable supports backpressure you have to actually control
-                    // how many items you can consume by calling request method on your Subscription
-                    // so that they can be emitted by Flowables
-                    subscription = s
-                    subscription.request(MY_MAX_VALUE.toLong())
-                }
-
-                override fun onNext(it: Int) {
-                    if (it.compareTo(0) == 0)
-                        Log.d(TAG, "onNext: Thread name:: -> " + Thread.currentThread().name)
-
-                    Log.d(TAG, "onNext: -> $it")
-                }
-
-                override fun onError(t: Throwable?) {
-                    Log.d(TAG, "onError: Thread name:: -> " + Thread.currentThread().name)
-                    Log.d(TAG, "onError: ", t)
-                }
-
-                override fun onComplete() {
-                    Log.d(TAG, "onComplete: Thread name:: -> " + Thread.currentThread().name)
-                    Log.d(TAG, "onComplete: called.")
-                }
-
-            })
-
+            .subscribe {
+                if (it.compareTo(0) == 0)
+                    Log.d(TAG, "onNext: Thread name:: -> " + Thread.currentThread().name)
+                Log.d(TAG, "onNext: -> $it")
+            }
+        disposables.add(disposable)
     }
 
     // to see calling method disposables.clear() in onDestroy()
@@ -71,8 +46,10 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
 
         Log.d(TAG, "onDestroy: Thread name:: -> " + Thread.currentThread().name)
-
-        subscription.cancel()
-        Log.d(TAG, "onDestroy: subscription.cancel() called")
+        // Then when the Observer is no longer needed, clear the disposables.
+        // A good place to do this is in the onDestroy() method of an Activity or Fragment.
+        // Or in the onCleared() method of a ViewModel.
+        disposables.clear()
+        Log.d(TAG, "onDestroy: disposables.clear() called")
     }
 }
